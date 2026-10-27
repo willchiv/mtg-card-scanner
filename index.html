@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Card Scanner & Shared Inventory Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Tesseract.js for OCR scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden bg-slate-950">
+
+    <!-- Header Navigation -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-gradient-to-tr from-amber-500 to-red-600 p-2 rounded-lg text-white shadow-lg">
+                <i data-lucide="sparkles" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-bold text-lg text-slate-100 leading-none">ManaScan Live</h1>
+                    <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-semibold px-2 py-0.5 rounded border border-indigo-500/30">Shared Hub</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Multiplayer Scanner & Inventory Sync</p>
+            </div>
+        </div>
+
+        <!-- Room Share Indicator & Tab Navigation -->
+        <div class="flex items-center space-x-2">
+            <!-- Room / Multi-user Badge -->
+            <button onclick="openRoomModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 flex items-center space-x-1.5 transition-all">
+                <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
+                <span id="roomBadgeText">Room: Local</span>
+            </button>
+
+            <button id="tabBtnScanner" onclick="switchTab('scanner')" class="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 bg-indigo-600 text-white transition-all">
+                <i data-lucide="camera" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Scanner</span>
+            </button>
+            <button id="tabBtnInventory" onclick="switchTab('inventory')" class="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+                <span>Inventory</span>
+                <span id="inventoryBadge" class="bg-amber-500/20 text-amber-400 text-xs px-2 py-0.5 rounded-full font-bold ml-1">0</span>
+            </button>
+            <button id="tabBtnAnalytics" onclick="switchTab('analytics')" class="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Analytics</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 overflow-hidden relative">
+
+        <!-- ================= SCANNER TAB ================= -->
+        <section id="tabScanner" class="h-full flex flex-col lg:flex-row p-4 gap-4 overflow-y-auto lg:overflow-hidden">
+            <!-- Left Side: Camera View -->
+            <div class="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl min-h-[420px]">
+                
+                <div class="p-3 bg-slate-900/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 z-10">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="video" class="w-4 h-4 text-indigo-400"></i>
+                        <span class="text-sm font-semibold text-slate-200">Camera Feed</span>
+                        <span id="docCamBadge" class="hidden text-[10px] bg-emerald-500/20 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                            <i data-lucide="camera" class="w-3 h-3"></i> DocCam Active
+                        </span>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <select id="cameraSelect" onchange="changeCamera()" class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[180px] sm:max-w-[240px] truncate">
+                            <option value="">Detecting Cameras...</option>
+                        </select>
+
+                        <button onclick="toggleVideoRotate()" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 flex items-center gap-1 text-xs" title="Rotate 180°">
+                            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                            <span class="hidden sm:inline">Flip</span>
+                        </button>
+
+                        <button onclick="initCamera()" class="p-1.5 bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-700" title="Refresh Camera">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Video Viewport -->
+                <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden min-h-[260px]">
+                    <video id="webcam" class="w-full h-full object-contain transition-transform duration-300" autoplay playsinline muted></video>
+                    <canvas id="snapshotCanvas" class="hidden"></canvas>
+
+                    <!-- Target Guide -->
+                    <div id="targetGuide" class="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div class="relative w-64 h-[22rem] sm:w-80 sm:h-[28rem] border-2 border-indigo-500/60 rounded-xl transition-all duration-300">
+                            <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-indigo-400 rounded-tl-lg"></div>
+                            <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-indigo-400 rounded-tr-lg"></div>
+                            <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-indigo-400 rounded-bl-lg"></div>
+                            <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-indigo-400 rounded-br-lg"></div>
+                            
+                            <div class="absolute top-4 left-4 right-4 h-10 border-2 border-amber-400/80 bg-amber-500/10 rounded-lg flex items-center justify-center shadow-lg backdrop-blur-[1px]">
+                                <span class="text-[11px] text-amber-300 font-mono font-semibold tracking-wider uppercase">Align Card Title Here</span>
+                            </div>
+
+                            <div class="absolute inset-x-0 bottom-3 text-center">
+                                <span class="text-xs bg-slate-900/90 text-slate-200 px-3 py-1 rounded-full border border-slate-700 shadow-md backdrop-blur-sm">Position card inside frame</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- HUD Status -->
+                    <button id="hudToggleBtn" onclick="toggleHudStatus()" class="absolute top-3 right-3 z-20 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 rounded-lg p-2 text-xs flex items-center space-x-1.5 shadow-xl backdrop-blur-md">
+                        <i data-lucide="info" class="w-4 h-4 text-indigo-400"></i>
+                        <span id="hudToggleText" class="hidden sm:inline font-medium font-mono">HUD</span>
+                    </button>
+
+                    <div id="targetHudStatus" class="absolute top-3 right-3 pointer-events-auto bg-slate-950/95 border border-indigo-500/50 rounded-xl p-3 shadow-2xl backdrop-blur-md hidden max-w-[280px] sm:max-w-xs w-full z-20 transition-all">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-1.5">
+                            <div class="flex items-center space-x-2">
+                                <span id="hudStatusDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                                <span id="hudStatusTitle" class="text-xs font-bold text-indigo-300 uppercase tracking-wide">Scan HUD</span>
+                            </div>
+                            <button onclick="hideHudStatus()" class="p-1 hover:bg-slate-800 rounded-md text-slate-400 hover:text-slate-200">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <p id="hudStatusMessage" class="text-xs text-slate-200 font-medium leading-tight">Ready to capture snapshot...</p>
+                        
+                        <div id="ocrPreviewContainer" class="mt-2 hidden">
+                            <span class="text-[10px] text-slate-400 uppercase font-mono block mb-1">OCR Sample Region:</span>
+                            <canvas id="ocrPreviewCanvas" class="w-full h-12 bg-black border border-slate-800 rounded object-contain"></canvas>
+                        </div>
+
+                        <div id="hudRawTextContainer" class="mt-1.5 pt-1.5 border-t border-slate-800/80 hidden">
+                            <span class="text-[10px] text-slate-400 uppercase font-mono block">Raw Extracted Text:</span>
+                            <p id="hudRawText" class="text-xs font-mono text-emerald-400 font-semibold truncate bg-slate-900 px-2 py-1 rounded mt-0.5 border border-slate-800">--</p>
+                        </div>
+                    </div>
+
+                    <div id="scanOverlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center hidden z-20">
+                        <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                        <p id="scanStatusText" class="text-sm font-medium text-slate-200">Reading card title...</p>
+                    </div>
+                </div>
+
+                <!-- Manual & Capture Toolbar -->
+                <div class="p-3 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 relative z-30">
+                    <button id="captureBtn" onclick="captureAndScan()" class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg shadow-lg flex items-center space-x-2 transition-all">
+                        <i data-lucide="scan" class="w-4 h-4"></i>
+                        <span>Scan Snapshot</span>
+                    </button>
+
+                    <div class="flex-1 max-w-xs relative">
+                        <input type="text" id="manualCardSearch" placeholder="Or type card name manually..." 
+                            class="w-full bg-slate-800 border border-slate-700 text-sm text-slate-100 rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            oninput="debouncedSearch(this.value)">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5"></i>
+                        <div id="searchResults" class="absolute left-0 right-0 bottom-full mb-1 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl max-h-56 overflow-y-auto hidden z-50"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Card Details -->
+            <div class="w-full lg:w-96 flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+                <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                    <span class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i data-lucide="tag" class="w-4 h-4 text-emerald-400"></i>
+                        Scanned Card Details
+                    </span>
+                    <span id="activeSetBadge" class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">No Card Selected</span>
+                </div>
+
+                <div class="flex-1 p-4 overflow-y-auto space-y-4" id="cardDetailContainer">
+                    <div id="emptyCardState" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                        <div class="w-16 h-16 rounded-full bg-slate-800/80 flex items-center justify-center mb-3 text-slate-600">
+                            <i data-lucide="credit-card" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="text-sm font-medium text-slate-300">No Card Detected Yet</h3>
+                        <p class="text-xs text-slate-500 mt-1 max-w-xs">Center your card in the viewfinder and click 'Scan Snapshot' or search manually.</p>
+                    </div>
+
+                    <div id="activeCardView" class="hidden space-y-4">
+                        <div class="flex gap-4 items-start">
+                            <img id="cardImage" src="" alt="Card Art" class="w-28 rounded-lg border border-slate-700 shadow-md object-cover bg-slate-950">
+                            <div class="flex-1 min-w-0">
+                                <h2 id="cardTitle" class="font-bold text-slate-100 text-base leading-tight truncate">Card Name</h2>
+                                <p id="cardType" class="text-xs text-slate-400 mt-0.5 truncate">Type Line</p>
+                                <div class="mt-2 flex flex-wrap gap-1" id="cardBadges">
+                                    <span id="cardRarity" class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Rare</span>
+                                    <span id="cardCollectorNumber" class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">#000</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                            <label class="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider block flex items-center justify-between">
+                                <span>Select Specific Printing</span>
+                                <span id="variantCountBadge" class="text-[10px] font-mono text-slate-400 font-normal">1 version</span>
+                            </label>
+                            <select id="cardVariantSelect" onchange="onVariantChange(this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-100 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate">
+                                <option value="">Loading printings...</option>
+                            </select>
+                        </div>
+
+                        <div class="bg-slate-950 rounded-xl p-3 border border-slate-800 space-y-2">
+                            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                                <span class="text-xs font-bold text-emerald-400">TCGplayer Live</span>
+                                <a id="tcgDirectLink" href="#" target="_blank" rel="noopener noreferrer" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1">
+                                    <span>Buy / View</span>
+                                    <i data-lucide="external-link" class="w-3 h-3"></i>
+                                </a>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Market Price</span>
+                                    <span id="priceMarket" class="text-lg font-bold text-emerald-400">$0.00</span>
+                                </div>
+                                <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Low Price</span>
+                                    <span id="priceLow" class="text-lg font-bold text-slate-200">$0.00</span>
+                                </div>
+                                <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Foil Market</span>
+                                    <span id="priceFoil" class="text-sm font-semibold text-purple-400">N/A</span>
+                                </div>
+                                <div class="bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                    <span class="text-[10px] uppercase font-semibold text-slate-400 block">Mid Value</span>
+                                    <span id="priceMid" class="text-sm font-semibold text-slate-300">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-800 space-y-3">
+                            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Inventory Options</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Condition</label>
+                                    <select id="cardCondition" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:outline-none">
+                                        <option value="Near Mint">Near Mint (NM)</option>
+                                        <option value="Lightly Played">Lightly Played (LP)</option>
+                                        <option value="Moderately Played">Moderately Played (MP)</option>
+                                        <option value="Heavily Played">Heavily Played (HP)</option>
+                                        <option value="Damaged">Damaged (DMG)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] text-slate-400 block mb-1">Finish</label>
+                                    <select id="cardFinish" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:outline-none">
+                                        <option value="Nonfoil">Nonfoil</option>
+                                        <option value="Foil">Foil</option>
+                                        <option value="Etched">Etched</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2">
+                                <div class="w-24">
+                                    <label class="text-[11px] text-slate-400 block mb-1">Qty</label>
+                                    <input type="number" id="cardQty" value="1" min="1" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:outline-none text-center font-bold">
+                                </div>
+                                <button onclick="addCurrentCardToInventory()" class="flex-1 mt-5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 px-3 rounded-lg shadow-md transition-all flex items-center justify-center space-x-1.5">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                    <span>Add To Shared Hub</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= INVENTORY TAB ================= -->
+        <section id="tabInventory" class="h-full flex-col p-4 hidden overflow-hidden">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl flex-1 flex flex-col overflow-hidden shadow-xl">
+                <div class="p-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-900">
+                    <div class="flex items-center space-x-3">
+                        <div class="relative">
+                            <input type="text" id="inventorySearch" oninput="renderInventory()" placeholder="Filter collection..." 
+                                class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg pl-8 pr-3 py-1.5 w-48 sm:w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                        </div>
+                        <span id="invTotalCount" class="text-xs text-slate-400 font-medium">0 items</span>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button onclick="exportCSV()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center space-x-1">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            <span>Export CSV</span>
+                        </button>
+                        <button onclick="clearInventory()" class="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-800/40 text-xs font-medium rounded-lg flex items-center space-x-1">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            <span>Clear All</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-slate-950/80 sticky top-0 text-slate-400 font-medium border-b border-slate-800 uppercase tracking-wider">
+                            <tr>
+                                <th class="p-3">Card</th>
+                                <th class="p-3">Set</th>
+                                <th class="p-3">Finish</th>
+                                <th class="p-3">Condition</th>
+                                <th class="p-3 text-right">Market Price</th>
+                                <th class="p-3 text-right">Low Price</th>
+                                <th class="p-3 text-center">Qty</th>
+                                <th class="p-3 text-right">Total</th>
+                                <th class="p-3 text-center">Added By</th>
+                                <th class="p-3 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody" class="divide-y divide-slate-800/60 text-slate-200">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap justify-between items-center gap-4 text-xs">
+                    <div class="flex items-center space-x-4">
+                        <div>
+                            <span class="text-slate-400">Total Cards: </span>
+                            <span id="invSummaryQty" class="font-bold text-slate-100">0</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Unique Cards: </span>
+                            <span id="invSummaryUnique" class="font-bold text-slate-100">0</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div>
+                            <span class="text-slate-400">Estimated Low: </span>
+                            <span id="invSummaryLow" class="font-bold text-slate-300">$0.00</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Total Market Value: </span>
+                            <span id="invSummaryMarket" class="font-bold text-emerald-400 text-sm">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ANALYTICS TAB ================= -->
+        <section id="tabAnalytics" class="h-full p-4 hidden overflow-y-auto">
+            <div class="max-w-5xl mx-auto space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center space-x-4 shadow-md">
+                        <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                            <i data-lucide="dollar-sign" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">Total Market Value</p>
+                            <h3 id="analyticsMarketVal" class="text-xl font-bold text-emerald-400">$0.00</h3>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center space-x-4 shadow-md">
+                        <div class="p-3 bg-indigo-500/10 text-indigo-400 rounded-lg">
+                            <i data-lucide="layers" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">Total Cards Scanned</p>
+                            <h3 id="analyticsTotalQty" class="text-xl font-bold text-slate-100">0</h3>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center space-x-4 shadow-md">
+                        <div class="p-3 bg-amber-500/10 text-amber-400 rounded-lg">
+                            <i data-lucide="award" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">Most Valuable Card</p>
+                            <h3 id="analyticsTopCard" class="text-sm font-bold text-slate-100 truncate max-w-[160px]">N/A</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center space-x-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-400"></i>
+                            <span>Rarity Distribution</span>
+                        </h3>
+                        <div id="rarityBreakdown" class="space-y-2"></div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center space-x-2">
+                            <i data-lucide="palette" class="w-4 h-4 text-amber-400"></i>
+                            <span>Color Identity</span>
+                        </h3>
+                        <div id="colorBreakdown" class="grid grid-cols-2 gap-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Multi-User Room Sharing Modal -->
+    <div id="roomModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-2 text-indigo-400">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                    <h3 class="font-bold text-slate-100 text-base">Shared Multi-User Inventory</h3>
+                </div>
+                <button onclick="closeRoomModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-300 leading-relaxed">
+                Connect your scanner to a shared collection room. Anyone with your Room Code can scan cards into the exact same shared inventory in real-time!
+            </p>
+
+            <div class="space-y-3 pt-1">
+                <div>
+                    <label class="text-xs font-semibold text-slate-400 block mb-1">Your Nickname</label>
+                    <input type="text" id="userNicknameInput" placeholder="e.g. Alex" class="w-full bg-slate-950 border border-slate-700 text-xs text-slate-100 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+
+                <div>
+                    <label class="text-xs font-semibold text-slate-400 block mb-1">Shared Room ID / Code</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="roomIdInput" placeholder="e.g. fnm-draft-room" class="flex-1 bg-slate-950 border border-slate-700 text-xs text-slate-100 rounded-lg p-2.5 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <button onclick="generateRandomRoomCode()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 rounded-lg border border-slate-700">Random</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+                <button onclick="switchToLocalStorageMode()" class="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200">
+                    Use Private Local Storage
+                </button>
+                <button onclick="connectToSharedRoom()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-md flex items-center space-x-1.5">
+                    <i data-lucide="wifi" class="w-4 h-4"></i>
+                    <span>Connect Shared Room</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Popup -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-lg shadow-2xl flex items-center space-x-3 transition-all duration-300 opacity-0 pointer-events-none translate-y-2 z-50">
+        <i id="toastIcon" data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+        <span id="toastMsg" class="text-xs font-medium">Notification Message</span>
+    </div>
+
+    <!-- Custom Modal for Confirmation -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 text-red-400">
+                <i data-lucide="alert-triangle" class="w-6 h-6 shrink-0"></i>
+                <h3 class="font-bold text-slate-100 text-base">Clear Inventory?</h3>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">Are you sure you want to clear your current collection list? This action cannot be undone.</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeConfirmModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold">Cancel</button>
+                <button onclick="confirmClearInventoryAction()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold">Yes, Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Realtime Sync Setup -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global environment variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'mtg-mana-scan-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let roomUnsubscribe = null;
+
+        // Make Firebase helpers globally accessible
+        window.isCloudMode = false;
+        window.activeRoomId = null;
+        window.userNickname = localStorage.getItem('mtg_user_nickname') || 'Player 1';
+
+        async function initCloudSync() {
+            if (!firebaseConfig) return;
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (initialAuthToken) {
+                    const userCred = await signInWithCustomToken(auth, initialAuthToken);
+                    currentUser = userCred.user;
+                } else {
+                    const userCred = await signInAnonymously(auth);
+                    currentUser = userCred.user;
+                }
+            } catch (err) {
+                console.warn("Cloud sync initialization fallback to local:", err);
+            }
+        }
+
+        window.connectToSharedRoom = async function() {
+            const nickInput = document.getElementById('userNicknameInput').value.trim() || 'Player';
+            let roomInput = document.getElementById('roomIdInput').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+
+            if (!roomInput) {
+                showToast("Please enter a Room ID.", "error");
+                return;
+            }
+
+            window.userNickname = nickInput;
+            localStorage.setItem('mtg_user_nickname', nickInput);
+            window.activeRoomId = roomInput;
+
+            if (!currentUser && firebaseConfig) {
+                await initCloudSync();
+            }
+
+            if (db && currentUser) {
+                window.isCloudMode = true;
+                subscribeToRoom(roomInput);
+                document.getElementById('roomBadgeText').innerText = `Room: ${roomInput}`;
+                showToast(`Connected to Room "${roomInput}" as ${nickInput}`);
+            } else {
+                showToast("Cloud sync service unavailable. Using Local mode.", "error");
+            }
+            closeRoomModal();
+        };
+
+        window.switchToLocalStorageMode = function() {
+            if (roomUnsubscribe) {
+                roomUnsubscribe();
+                roomUnsubscribe = null;
+            }
+            window.isCloudMode = false;
+            window.activeRoomId = null;
+            document.getElementById('roomBadgeText').innerText = "Room: Local";
+            loadInventory();
+            renderInventory();
+            closeRoomModal();
+            showToast("Switched to Local Storage Mode");
+        };
+
+        function subscribeToRoom(roomId) {
+            if (roomUnsubscribe) roomUnsubscribe();
+
+            const colRef = collection(db, 'artifacts', appId, 'public', 'data', `room_${roomId}`);
+            roomUnsubscribe = onSnapshot(colRef, (snapshot) => {
+                const cloudItems = [];
+                snapshot.forEach(doc => {
+                    cloudItems.push(doc.data());
+                });
+                window.inventory = cloudItems;
+                updateInventoryBadge();
+                if (!document.getElementById('tabInventory').classList.contains('hidden')) {
+                    renderInventory();
+                }
+                if (!document.getElementById('tabAnalytics').classList.contains('hidden')) {
+                    renderAnalytics();
+                }
+            }, (error) => {
+                console.error("Room listener error:", error);
+                showToast("Failed to sync room inventory.", "error");
+            });
+        }
+
+        window.syncItemToCloud = async function(item) {
+            if (!window.isCloudMode || !db || !window.activeRoomId) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', `room_${window.activeRoomId}`, item.id);
+                await setDoc(docRef, item);
+            } catch(e) {
+                console.error("Cloud save error:", e);
+            }
+        };
+
+        window.removeItemFromCloud = async function(itemId) {
+            if (!window.isCloudMode || !db || !window.activeRoomId) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', `room_${window.activeRoomId}`, itemId);
+                await deleteDoc(docRef);
+            } catch(e) {
+                console.error("Cloud delete error:", e);
+            }
+        };
+
+        window.clearRoomCloudStorage = async function() {
+            if (!window.isCloudMode || !db || !window.activeRoomId) return;
+            window.inventory.forEach(async (item) => {
+                await removeItemFromCloud(item.id);
+            });
+        };
+
+        // Initialize Cloud Firebase connection on page load
+        initCloudSync();
+    </script>
+
+    <!-- Core App Logic -->
+    <script>
+        let currentStream = null;
+        let activeCardData = null;
+        let cardVariants = [];
+        window.inventory = [];
+        let searchDebounceTimer = null;
+        let currentRotation = 0;
+        let isHudUserClosed = false;
+
+        window.onload = function() {
+            lucide.createIcons();
+            loadInventory();
+            initCameraList();
+        };
+
+        // --- ROOM MODAL HELPERS ---
+        function openRoomModal() {
+            document.getElementById('userNicknameInput').value = window.userNickname || 'Player 1';
+            document.getElementById('roomIdInput').value = window.activeRoomId || 'friends-hub';
+            document.getElementById('roomModal').classList.remove('hidden');
+            document.getElementById('roomModal').classList.add('flex');
+        }
+
+        function closeRoomModal() {
+            document.getElementById('roomModal').classList.add('hidden');
+            document.getElementById('roomModal').classList.remove('flex');
+        }
+
+        function generateRandomRoomCode() {
+            const rand = Math.random().toString(36).substring(2, 8);
+            document.getElementById('roomIdInput').value = `room-${rand}`;
+        }
+
+        // --- HUD SCAN STATUS DISPLAY ---
+        function updateHudStatus(message, rawText = null, isError = false) {
+            const hud = document.getElementById('targetHudStatus');
+            const msgEl = document.getElementById('hudStatusMessage');
+            const rawContainer = document.getElementById('hudRawTextContainer');
+            const rawEl = document.getElementById('hudRawText');
+            const dot = document.getElementById('hudStatusDot');
+
+            if (!isHudUserClosed) {
+                hud.classList.remove('hidden');
+            }
+            msgEl.innerText = message;
+
+            if (isError) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+            } else {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping";
+            }
+
+            if (rawText) {
+                rawContainer.classList.remove('hidden');
+                rawEl.innerText = rawText;
+            } else {
+                rawContainer.classList.add('hidden');
+            }
+        }
+
+        function hideHudStatus() {
+            isHudUserClosed = true;
+            document.getElementById('targetHudStatus').classList.add('hidden');
+        }
+
+        function toggleHudStatus() {
+            const hud = document.getElementById('targetHudStatus');
+            if (hud.classList.contains('hidden')) {
+                isHudUserClosed = false;
+                hud.classList.remove('hidden');
+            } else {
+                isHudUserClosed = true;
+                hud.classList.add('hidden');
+            }
+        }
+
+        // --- TAB SWITCHING ---
+        function switchTab(tabName) {
+            const tabs = ['scanner', 'inventory', 'analytics'];
+            tabs.forEach(t => {
+                const el = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (t === tabName) {
+                    el.classList.remove('hidden');
+                    if (t === 'inventory' || t === 'analytics') el.classList.add('flex');
+                    btn.className = "px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 bg-indigo-600 text-white transition-all";
+                } else {
+                    el.classList.add('hidden');
+                    el.classList.remove('flex');
+                    btn.className = "px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all";
+                }
+            });
+
+            if (tabName === 'inventory') renderInventory();
+            if (tabName === 'analytics') renderAnalytics();
+        }
+
+        // --- CAMERA INITIALIZATION ---
+        async function initCameraList() {
+            try {
+                const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                initialStream.getTracks().forEach(t => t.stop());
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                const select = document.getElementById('cameraSelect');
+                select.innerHTML = '';
+
+                let docCamId = null;
+                videoDevices.forEach((device, index) => {
+                    const opt = document.createElement('option');
+                    opt.value = device.deviceId;
+                    const label = device.label || `Camera ${index + 1}`;
+                    opt.text = label;
+
+                    const lower = label.toLowerCase();
+                    if (lower.includes('inswan') || lower.includes('doc') || lower.includes('document')) {
+                        docCamId = device.deviceId;
+                        opt.text = `📷 ${label} (DocCam)`;
+                    }
+                    select.appendChild(opt);
+                });
+
+                if (docCamId) select.value = docCamId;
+                await initCamera();
+            } catch (err) {
+                initCameraFallback();
+            }
+        }
+
+        async function initCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(t => t.stop());
+                currentStream = null;
+            }
+
+            const video = document.getElementById('webcam');
+            const select = document.getElementById('cameraSelect');
+            const badge = document.getElementById('docCamBadge');
+            const selectedId = select.value;
+            const selectedText = select.options[select.selectedIndex]?.text.toLowerCase() || '';
+
+            if (selectedText.includes('inswan') || selectedText.includes('doc') || selectedText.includes('document')) {
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            const constraints = {
+                video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+            };
+            if (selectedId) constraints.video.deviceId = { ideal: selectedId };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (err) {
+                initCameraFallback();
+            }
+        }
+
+        async function initCameraFallback() {
+            const video = document.getElementById('webcam');
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = currentStream;
+            } catch (e) {
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = currentStream;
+                } catch (err) {
+                    showToast("Unable to access camera device", "error");
+                }
+            }
+        }
+
+        function changeCamera() { initCamera(); }
+
+        function toggleVideoRotate() {
+            const video = document.getElementById('webcam');
+            currentRotation = (currentRotation + 180) % 360;
+            video.style.transform = `rotate(${currentRotation}deg)`;
+            showToast(`Rotated camera feed ${currentRotation}°`);
+        }
+
+        // --- SCANNING & OCR ENGINE ---
+        async function captureAndScan() {
+            const video = document.getElementById('webcam');
+            const canvas = document.getElementById('snapshotCanvas');
+            const ctx = canvas.getContext('2d');
+
+            if (!video.videoWidth) {
+                showToast("Camera feed not ready.", "error");
+                updateHudStatus("Camera feed not ready.", null, true);
+                return;
+            }
+
+            isHudUserClosed = false;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            if (currentRotation === 180) {
+                ctx.translate(canvas.width, canvas.height);
+                ctx.rotate(Math.PI);
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const overlay = document.getElementById('scanOverlay');
+            const statusText = document.getElementById('scanStatusText');
+            overlay.classList.remove('hidden');
+            statusText.innerText = "Processing snapshot...";
+            updateHudStatus("Processing card snapshot...", null);
+
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("OCR timed out. Try manual search.")), 10000)
+            );
+
+            try {
+                const guideEl = document.querySelector('#targetGuide > div');
+                const videoEl = document.getElementById('webcam');
+                
+                const videoRect = videoEl.getBoundingClientRect();
+                const guideRect = guideEl.getBoundingClientRect();
+
+                const scaleX = video.videoWidth / videoRect.width;
+                const scaleY = video.videoHeight / videoRect.height;
+
+                const cardBoxX = Math.max(0, Math.floor((guideRect.left - videoRect.left) * scaleX));
+                const cardBoxY = Math.max(0, Math.floor((guideRect.top - videoRect.top) * scaleY));
+                const cardBoxWidth = Math.min(canvas.width - cardBoxX, Math.floor(guideRect.width * scaleX));
+                const cardBoxHeight = Math.min(canvas.height - cardBoxY, Math.floor(guideRect.height * scaleY));
+
+                const isolatedCardCanvas = document.createElement('canvas');
+                isolatedCardCanvas.width = cardBoxWidth;
+                isolatedCardCanvas.height = cardBoxHeight;
+                const isolatedCtx = isolatedCardCanvas.getContext('2d');
+                isolatedCtx.drawImage(canvas, cardBoxX, cardBoxY, cardBoxWidth, cardBoxHeight, 0, 0, cardBoxWidth, cardBoxHeight);
+
+                const cropWidth = Math.floor(cardBoxWidth * 0.90);
+                const cropHeight = Math.floor(cardBoxHeight * 0.16);
+                const cropX = Math.floor((cardBoxWidth - cropWidth) / 2);
+                const cropY = Math.floor(cardBoxHeight * 0.03);
+
+                const croppedCanvas = document.createElement('canvas');
+                croppedCanvas.width = cropWidth;
+                croppedCanvas.height = cropHeight;
+                const croppedCtx = croppedCanvas.getContext('2d');
+                
+                croppedCtx.drawImage(isolatedCardCanvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+                const imgData = croppedCtx.getImageData(0, 0, cropWidth, cropHeight);
+                const d = imgData.data;
+                for (let i = 0; i < d.length; i += 4) {
+                    const avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+                    const v = avg > 120 ? 255 : 0;
+                    d[i] = v;
+                    d[i + 1] = v;
+                    d[i + 2] = v;
+                }
+                croppedCtx.putImageData(imgData, 0, 0);
+
+                const previewCanvas = document.getElementById('ocrPreviewCanvas');
+                const previewContainer = document.getElementById('ocrPreviewContainer');
+                if (previewCanvas) {
+                    previewCanvas.width = cropWidth;
+                    previewCanvas.height = cropHeight;
+                    const pCtx = previewCanvas.getContext('2d');
+                    pCtx.drawImage(croppedCanvas, 0, 0);
+                    previewContainer.classList.remove('hidden');
+                }
+
+                statusText.innerText = "Extracting title text...";
+                updateHudStatus("Running optical text recognition...", null);
+                
+                const ocrPromise = Tesseract.recognize(croppedCanvas, 'eng');
+                const result = await Promise.race([ocrPromise, timeoutPromise]);
+                
+                let cleanedText = result.data.text ? result.data.text.replace(/[^a-zA-Z0-9\s,']/g, ' ').replace(/\s+/g, ' ').trim() : '';
+
+                if (!cleanedText || cleanedText.length < 3) {
+                    statusText.innerText = "Running header fallback scan...";
+                    updateHudStatus("Title box unclear. Scanning upper card area...", null);
+                    
+                    const topCardCanvas = document.createElement('canvas');
+                    topCardCanvas.width = cardBoxWidth;
+                    topCardCanvas.height = Math.floor(cardBoxHeight * 0.40);
+                    const topCardCtx = topCardCanvas.getContext('2d');
+                    topCardCtx.drawImage(isolatedCardCanvas, 0, 0, cardBoxWidth, topCardCanvas.height, 0, 0, cardBoxWidth, topCardCanvas.height);
+                    
+                    const fullResult = await Promise.race([Tesseract.recognize(topCardCanvas, 'eng'), timeoutPromise]);
+                    cleanedText = fullResult.data.text ? fullResult.data.text.replace(/[^a-zA-Z0-9\s,']/g, ' ').replace(/\s+/g, ' ').trim() : '';
+                }
+
+                overlay.classList.add('hidden');
+
+                if (cleanedText && cleanedText.length >= 2) {
+                    updateHudStatus("Card text extracted! Looking up card...", `"${cleanedText}"`);
+                    showToast(`Scanned: "${cleanedText.substring(0, 24)}..."`);
+                    fetchCardFromScryfall(cleanedText);
+                } else {
+                    updateHudStatus("Could not read title clearly. Please align card.", null, true);
+                    showToast("Could not read title text clearly.", "error");
+                }
+
+            } catch (err) {
+                console.error(err);
+                overlay.classList.add('hidden');
+                updateHudStatus(err.message || "Scan failed.", null, true);
+                showToast(err.message || "Scan failed.", "error");
+            }
+        }
+
+        // --- SCRYFALL API ---
+        async function fetchCardFromScryfall(query) {
+            try {
+                const cleanQuery = query.replace(/[^\w\s']/gi, '').trim();
+                let res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cleanQuery)}`);
+                
+                if (!res.ok) {
+                    const firstWords = cleanQuery.split(' ').filter(w => w.length > 2).slice(0, 3).join(' ');
+                    if (firstWords.length >= 3) {
+                        res = await fetch(`https://api.scryfall.com/cards/search?q=${encodeURIComponent(firstWords)}`);
+                        if (res.ok) {
+                            const searchData = await res.json();
+                            if (searchData.data && searchData.data.length > 0) {
+                                const matchedCard = searchData.data[0];
+                                updateHudStatus(`Matched: ${matchedCard.name}`, `"${matchedCard.name}"`);
+                                displayActiveCard(matchedCard);
+                                fetchCardPrintings(matchedCard.oracle_id || matchedCard.name);
+                                return;
+                            }
+                        }
+                    }
+                    
+                    updateHudStatus(`Card "${cleanQuery}" not found. Try searching manually.`, `"${query}"`, true);
+                    showToast(`Card "${cleanQuery}" not found.`, "error");
+                    return;
+                }
+                
+                const card = await res.json();
+                updateHudStatus(`Matched: ${card.name}`, `"${card.name}"`);
+                displayActiveCard(card);
+                fetchCardPrintings(card.oracle_id || card.name);
+            } catch (err) {
+                updateHudStatus("Error querying card database API.", null, true);
+                showToast("Error connecting to card pricing API.", "error");
+            }
+        }
+
+        async function fetchCardPrintings(oracleIdOrName) {
+            const select = document.getElementById('cardVariantSelect');
+            const badge = document.getElementById('variantCountBadge');
+            select.innerHTML = '<option value="">Loading printings...</option>';
+            
+            try {
+                let url = activeCardData && activeCardData.oracle_id ? 
+                    `https://api.scryfall.com/cards/search?q=oracle_id%3A${activeCardData.oracle_id}+unique%3Aprints&order=released` : 
+                    `https://api.scryfall.com/cards/search?q=%21%22${encodeURIComponent(oracleIdOrName)}%22+unique%3Aprints&order=released`;
+
+                const res = await fetch(url);
+                if (!res.ok) {
+                    select.innerHTML = `<option value="${activeCardData.id}">${activeCardData.set_name} (#${activeCardData.collector_number})</option>`;
+                    badge.innerText = '1 version';
+                    return;
+                }
+
+                const data = await res.json();
+                cardVariants = data.data || [];
+
+                select.innerHTML = '';
+                cardVariants.forEach(variant => {
+                    const opt = document.createElement('option');
+                    opt.value = variant.id;
+                    const setCode = (variant.set || '').toUpperCase();
+                    const setName = variant.set_name || setCode;
+                    const collectorNum = variant.collector_number ? `#${variant.collector_number}` : '';
+                    
+                    opt.text = `${setName} (${setCode}) ${collectorNum}`;
+                    if (activeCardData && variant.id === activeCardData.id) opt.selected = true;
+                    select.appendChild(opt);
+                });
+
+                badge.innerText = `${cardVariants.length} printings`;
+            } catch (err) {
+                if (activeCardData) {
+                    select.innerHTML = `<option value="${activeCardData.id}">${activeCardData.set_name} (#${activeCardData.collector_number})</option>`;
+                }
+                badge.innerText = '1 version';
+            }
+        }
+
+        function onVariantChange(selectedId) {
+            if (!selectedId || !cardVariants.length) return;
+            const selectedVariant = cardVariants.find(v => v.id === selectedId);
+            if (selectedVariant) displayActiveCard(selectedVariant);
+        }
+
+        function displayActiveCard(card) {
+            activeCardData = card;
+            document.getElementById('emptyCardState').classList.add('hidden');
+            document.getElementById('activeCardView').classList.remove('hidden');
+
+            document.getElementById('cardTitle').innerText = card.name;
+            document.getElementById('cardType').innerText = card.type_line || '';
+            document.getElementById('cardRarity').innerText = card.rarity || 'common';
+            document.getElementById('cardCollectorNumber').innerText = `#${card.collector_number || '000'}`;
+            document.getElementById('activeSetBadge').innerText = card.set_name || card.set.toUpperCase();
+
+            const imgUrl = card.image_uris ? card.image_uris.normal : (card.card_faces ? card.card_faces[0].image_uris.normal : '');
+            document.getElementById('cardImage').src = imgUrl;
+
+            const market = card.prices.usd ? `$${parseFloat(card.prices.usd).toFixed(2)}` : 'N/A';
+            const foil = card.prices.usd_foil ? `$${parseFloat(card.prices.usd_foil).toFixed(2)}` : 'N/A';
+            const low = card.prices.usd_low ? `$${parseFloat(card.prices.usd_low).toFixed(2)}` : (card.prices.usd ? `$${(parseFloat(card.prices.usd)*0.85).toFixed(2)}` : 'N/A');
+
+            document.getElementById('priceMarket').innerText = market;
+            document.getElementById('priceFoil').innerText = foil;
+            document.getElementById('priceLow').innerText = low;
+            document.getElementById('priceMid').innerText = market;
+
+            const tcgUrl = card.purchase_uris ? card.purchase_uris.tcgplayer : '#';
+            document.getElementById('tcgDirectLink').href = tcgUrl;
+        }
+
+        // --- SEARCH AUTOCOMPLETE ---
+        function debouncedSearch(val) {
+            clearTimeout(searchDebounceTimer);
+            if (!val || val.trim().length < 2) {
+                document.getElementById('searchResults').classList.add('hidden');
+                return;
+            }
+            searchDebounceTimer = setTimeout(() => autocompleteSearch(val.trim()), 300);
+        }
+
+        async function autocompleteSearch(query) {
+            try {
+                const res = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                const container = document.getElementById('searchResults');
+                container.innerHTML = '';
+
+                if (data.data && data.data.length > 0) {
+                    data.data.slice(0, 6).forEach(name => {
+                        const item = document.createElement('div');
+                        item.className = "px-3 py-2 text-xs text-slate-200 hover:bg-indigo-600 hover:text-white cursor-pointer border-b border-slate-700/50 last:border-0";
+                        item.innerText = name;
+                        item.onclick = () => {
+                            document.getElementById('manualCardSearch').value = name;
+                            container.classList.add('hidden');
+                            fetchCardFromScryfall(name);
+                        };
+                        container.appendChild(item);
+                    });
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // --- INVENTORY MANAGEMENT (WITH MULTIUSER REALTIME SYNC) ---
+        function addCurrentCardToInventory() {
+            if (!activeCardData) return;
+
+            const condition = document.getElementById('cardCondition').value;
+            const finish = document.getElementById('cardFinish').value;
+            const qty = parseInt(document.getElementById('cardQty').value) || 1;
+
+            const marketPrice = parseFloat(activeCardData.prices.usd || 0);
+            const lowPrice = activeCardData.prices.usd_low ? parseFloat(activeCardData.prices.usd_low) : (marketPrice * 0.85);
+
+            const item = {
+                id: `${activeCardData.id}_${finish}_${condition}`,
+                name: activeCardData.name,
+                set: activeCardData.set_name || activeCardData.set.toUpperCase(),
+                rarity: activeCardData.rarity,
+                colors: activeCardData.colors || [],
+                condition: condition,
+                finish: finish,
+                qty: qty,
+                priceMarket: marketPrice,
+                priceLow: lowPrice,
+                image: activeCardData.image_uris ? activeCardData.image_uris.small : '',
+                addedBy: window.userNickname || 'Player 1'
+            };
+
+            const idx = window.inventory.findIndex(i => i.id === item.id);
+            if (idx > -1) {
+                window.inventory[idx].qty += qty;
+                item.qty = window.inventory[idx].qty;
+            } else {
+                window.inventory.push(item);
+            }
+
+            if (window.isCloudMode) {
+                window.syncItemToCloud(item);
+            } else {
+                saveInventory();
+            }
+
+            showToast(`Added ${qty}x ${item.name}!`);
+        }
+
+        function saveInventory() {
+            if (!window.isCloudMode) {
+                localStorage.setItem('mtg_inventory', JSON.stringify(window.inventory));
+            }
+            updateInventoryBadge();
+        }
+
+        function loadInventory() {
+            if (!window.isCloudMode) {
+                const stored = localStorage.getItem('mtg_inventory');
+                if (stored) {
+                    try { window.inventory = JSON.parse(stored); } catch(e) { window.inventory = []; }
+                }
+            }
+            updateInventoryBadge();
+        }
+
+        function updateInventoryBadge() {
+            const count = window.inventory.reduce((s, i) => s + i.qty, 0);
+            document.getElementById('inventoryBadge').innerText = count;
+        }
+
+        function renderInventory() {
+            const filter = document.getElementById('inventorySearch').value.toLowerCase();
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+
+            const filtered = window.inventory.filter(i => i.name.toLowerCase().includes(filter) || i.set.toLowerCase().includes(filter));
+
+            let totalQty = 0, totalMarket = 0, totalLow = 0;
+
+            filtered.forEach((item, index) => {
+                const itemTotalMarket = item.priceMarket * item.qty;
+                const itemTotalLow = item.priceLow * item.qty;
+
+                totalQty += item.qty;
+                totalMarket += itemTotalMarket;
+                totalLow += itemTotalLow;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 border-b border-slate-800/60";
+                tr.innerHTML = `
+                    <td class="p-3 font-semibold flex items-center space-x-2">
+                        ${item.image ? `<img src="${item.image}" class="w-7 h-10 rounded object-cover">` : ''}
